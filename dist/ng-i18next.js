@@ -74,7 +74,9 @@ angular.module('jm.i18next').provider('$i18next', function () {
 
 			optionsObj = $i18nextTanslate.options;
 
-			init(optionsObj);
+			if (oldOptions !== newOptions) {
+				init(optionsObj);
+			}
 
 		}, true);
 
@@ -90,84 +92,23 @@ angular.module('jm.i18next').directive('ngI18next', ['$rootScope', '$i18next', '
 
 	'use strict';
 
-	function parse(scope, element, key) {
-
-		var attr = 'text',
-			attrs = [attr],
-			string;
-
-		/*
-		 * Check if we want to translate an attribute
-		 */
-		if (key.indexOf('[') === 0) {
-			var parts = key.split(']');
-			key = parts[1];
-			attr = parts[0].substr(1, parts[0].length - 1);
-		}
-		/*
-		 * Cut of the ";" that might be at the end of the string
-		 */
-		if (key.indexOf(';') === key.length - 1) {
-			key = key.substr(0, key.length - 2);
-		}
-		/*
-		 * If passing options, split attr
-		 */
-		if (attr.indexOf(':') >= 0) {
-			attrs = attr.split(':');
-			attr = attrs[0];
-		} else if (attr === 'i18next') {
-			attrs[1] = 'i18next';
-			attr = 'text';
+	function parse(scope, element, key, attr, options) {
+		var string;
+		// window.console.log(options);
+		if (options) {
+			string = $i18next(key, options);
+        } else {
+            string = $i18next(key);
 		}
 
-		if (attr !== 'i18next' && attrs[1] !== 'i18next') {
-
-			string = $i18next(key);
-
-		} else {
-
-			var options = {},
-				strippedKey = key;
-
-			if (key.indexOf('(') >= 0 && key.indexOf(')') >= 0) {
-
-				var keys = key.split(')');
-
-				keys[0] = keys[0].substr(1, keys[0].length);
-
-				if (keys.length > 2) {
-
-					strippedKey = keys.pop();
-
-					options = $parse(keys.join(')'))();
-
-				} else {
-
-					options = $parse(keys[0])();
-					strippedKey = keys[1];
-
-				}
-
-			}
-
-			string = $i18next(strippedKey, options);
-
-		}
-
-		if (attr === 'html') {
-
-			element.html(string);
-
-		} else if (attr === 'text') {
-
-			element.text(string);
-
-		} else {
-
+        if (!attr) {
+            element.text(string);
+        } else if (attr === 'html') {
+            element.html(string);
+        } else {
 			element.attr(attr, string);
+        }
 
-		}
 		/*
 		 * Now compile the content of the element and bind the variables to
 		 * the scope
@@ -180,22 +121,58 @@ angular.module('jm.i18next').directive('ngI18next', ['$rootScope', '$i18next', '
 	}
 
 
-	function localize(scope, element, key) {
+	function tokenize(text) {
+        // Gather attributes, options, and key
+        var attributes, options, key;
+        var matching = text.match(/\[(.*)\](?:\((.*)\))?/);
 
-		if (key.indexOf(';') >= 0) {
+        // Handle supplied attributes and options
+        if (matching) {
+            // Parse multiple attributes
+            attributes = matching[1].split(':');
+            // window.console.log("Attributes before: " + attributes);
+            if (attributes.indexOf('i18next') !== -1) {
+            	// Convert the supplied options to valid JSON
+                var optionsString = matching[2].replace(/'/g, '"');
+                var optionsString = optionsString.replace(/([a-zA-Z][^:^"]*)(?=\s*:)/g, '"$1"');
 
-			var keys = key.split(';');
+                try {
+                    options = JSON.parse(optionsString);
 
-			for (var i = 0; i < keys.length; i++) {
-				if (keys[i] !== '') {
-					parse(scope, element, keys[i]);
-				}
-			}
+                } catch (e) {
+                    // The options were not legally formatted, or not supplied. Ignoring.
+                }
 
-		} else {
-			parse(scope, element, key);
-		}
+                // Remove i18next from attributes list
+                attributes.splice(attributes.indexOf('i18next'), 1);
+            }
 
+            // Remove the attribute and options part of the text, leaving just the key
+            text = text.replace(matching[0], "");
+        }
+
+        var data = {
+            attributes: attributes && !!attributes.length && attributes,
+            options: options,
+            key: text
+        }
+
+        window.console.log(data);
+        return data;
+    }
+
+
+	function localize(scope, element, key, attributes, options) {
+		// window.console.log("Outer options: " + options);
+		// window.console.log("Outer attr: " + attributes);
+        if (!attributes) {
+			// window.console.log("Inner options: " + options);
+            parse(scope, element, key, attributes, options);
+            return;
+        }
+        for (var i = 0; i < attributes.length; i++) {
+            parse(scope, element, key, attributes[i], options);
+        }
 	}
 
 	return {
@@ -207,31 +184,36 @@ angular.module('jm.i18next').directive('ngI18next', ['$rootScope', '$i18next', '
 
 		link: function postLink(scope, element, attrs) {
 
-			var translationValue;
+			var key;
+            var tokens;
 
-			function observe (value) {
-
-				if (value === '') {
-					translationValue = element.text().replace(/^\s+|\s+$/g, ''); // RegEx removes whitespace
+            function observe (value) {
+                tokens = tokenize(value);
+				if (!tokens.key) {
+                    if (tokens.attributes && tokens.attributes.indexOf('html' !== -1)) {
+                       key = element.html().replace(/\n/g, "").replace(/^\s+|\s+$/g,"").replace(/[ \t]{2,}/g, " "); // RegEx removes whitespace
+                    } else {
+					   key = element.text().replace(/\n/g, "").replace(/^\s+|\s+$/g,"").replace(/[ \t]{2,}/g, " "); // RegEx removes whitespace
+                    }
 				} else {
-					translationValue = value;
+					key = tokens.key;
 				}
 
-				if (!translationValue) {
+				if (!key) {
 					// Well, seems that we don't have anything to translate...
 					return;
 				}
 
-				localize(scope, element, translationValue);
-
+				// window.console.log(tokens.options);
+				localize(scope, element, key, tokens.attributes, tokens.options);
 			}
 
 			attrs.$observe('ngI18next', observe);
-
 			observe(attrs.ngI18next);
+			// window.console.log(tokens);
 
 			scope.$on('i18nextLanguageChange', function () {
-				localize(scope, element, translationValue);
+				localize(scope, element, key, tokens.attributes, tokens.options);
 			});
 		}
 
