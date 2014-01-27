@@ -209,4 +209,15 @@ describe('jm.i18next - Directive', function () {
 
 	});
 
+	describe('simple HTML with string in element value', function () {
+
+		it('should translate "hello" into German ("de-DE"; default language)', function () {
+			inject(function ($rootScope, $compile) {
+				var c = $compile('<p ng-i18next="[html]">helloHTML</p>')($rootScope).html();
+				expect(c).toBe('<h1 class="ng-scope">Herzlich Willkommen!</h1>');
+			});
+		});
+
+	});
+
 });
