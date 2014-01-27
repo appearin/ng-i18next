@@ -94,7 +94,6 @@ angular.module('jm.i18next').directive('ngI18next', ['$rootScope', '$i18next', '
 
 	function parse(scope, element, key, attr, options) {
 		var string;
-		// window.console.log(options);
 		if (options) {
 			string = $i18next(key, options);
         } else {
@@ -130,7 +129,6 @@ angular.module('jm.i18next').directive('ngI18next', ['$rootScope', '$i18next', '
         if (matching) {
             // Parse multiple attributes
             attributes = matching[1].split(':');
-            // window.console.log("Attributes before: " + attributes);
             if (attributes.indexOf('i18next') !== -1) {
             	// Convert the supplied options to valid JSON
                 var optionsString = matching[2].replace(/'/g, '"');
@@ -157,16 +155,12 @@ angular.module('jm.i18next').directive('ngI18next', ['$rootScope', '$i18next', '
             key: text
         }
 
-        window.console.log(data);
         return data;
     }
 
 
 	function localize(scope, element, key, attributes, options) {
-		// window.console.log("Outer options: " + options);
-		// window.console.log("Outer attr: " + attributes);
         if (!attributes) {
-			// window.console.log("Inner options: " + options);
             parse(scope, element, key, attributes, options);
             return;
         }
@@ -204,13 +198,11 @@ angular.module('jm.i18next').directive('ngI18next', ['$rootScope', '$i18next', '
 					return;
 				}
 
-				// window.console.log(tokens.options);
 				localize(scope, element, key, tokens.attributes, tokens.options);
 			}
 
 			attrs.$observe('ngI18next', observe);
 			observe(attrs.ngI18next);
-			// window.console.log(tokens);
 
 			scope.$on('i18nextLanguageChange', function () {
 				localize(scope, element, key, tokens.attributes, tokens.options);
